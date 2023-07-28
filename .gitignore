@@ -2,3 +2,5 @@
 SynthBorg/SynthBorg/publish
 SynthBorg/SynthBorg/bin
 SynthBorg/SynthBorg/obj
+.vs
+.gitignore

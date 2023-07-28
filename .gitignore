@@ -1,0 +1,4 @@
+# .gitignore file
+SynthBorg/SynthBorg/publish
+SynthBorg/SynthBorg/bin
+SynthBorg/SynthBorg/obj

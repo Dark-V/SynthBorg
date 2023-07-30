@@ -419,7 +419,7 @@ namespace SynthBorg
         {
             foreach (var word in ignoredWords)
             {
-                LogMessage($"word={word} and message={message}");
+                // LogMessage($"word={word} and message={message}");
                 string pattern = @"\b" + Regex.Escape(word) + @"\b";
                 message = Regex.Replace(message, pattern, "*", RegexOptions.IgnoreCase);
             }

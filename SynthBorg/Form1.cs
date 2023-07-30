@@ -402,7 +402,7 @@ namespace SynthBorg
                     synthesizer.SelectVoice(selectedVoice);
                     synthesizer.Rate = selectedSpeed;
 
-                    ReplaceIgnoredWords(message);
+                    message = ReplaceIgnoredWords(message);
 
                     await Task.Run(() => synthesizer.SpeakAsync(message));
                     LogMessage("Spoke: " + message);
@@ -419,6 +419,7 @@ namespace SynthBorg
         {
             foreach (var word in ignoredWords)
             {
+                LogMessage($"word={word} and message={message}");
                 string pattern = @"\b" + Regex.Escape(word) + @"\b";
                 message = Regex.Replace(message, pattern, "*", RegexOptions.IgnoreCase);
             }

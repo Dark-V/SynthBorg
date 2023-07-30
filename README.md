@@ -22,7 +22,7 @@
 
 - Привелегии доступа настраиваются внутри программы.
 - Программа имеет в себе настриваемый белый и черный список пользователей.
-- Программа имеет возможность добавить список заблокированных слов, используя файл "C:\Users\%username%\Documents\SynthBorg\ignoredWords.txt".
+- Программа имеет возможность добавить список заблокированных слов, используя файл "C:\Users\\%username%\Documents\SynthBorg\ignoredWords.txt".
 - Например имея в файле список слов, сообщение 	**"wakan is loz"** будет озвученно как 	**"\* is \*"**:
   wakan
   loz
@@ -33,7 +33,7 @@
 
 - Access privileges are configured within the program.
 - Program has a customizable white and black list for users.
-- Program has the ability to add a list of blocked words using the file "C:\Users\%username%\Documents\SynthBorg\ignoredWords.txt".
+- Program has the ability to add a list of blocked words using the file "C:\Users\\%username%\Documents\SynthBorg\ignoredWords.txt".
 - For example, having a list of words in the file, the message 	**"wakan is loz"** will be voiced as 	**"\* is \*"**:
    wakan
    loz

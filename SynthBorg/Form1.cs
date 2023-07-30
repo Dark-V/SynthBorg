@@ -11,6 +11,9 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Text;
+using System.Runtime.Remoting.Channels;
+using System.Runtime.InteropServices;
 
 namespace SynthBorg
 {
@@ -33,6 +36,17 @@ namespace SynthBorg
         private StreamReader reader;
         private StreamWriter writer;
 
+        // hotkey code
+        private const int MOD_SHIFT = 0x0004;
+        private const int WM_HOTKEY = 0x0312;
+        private const int HOTKEY_ID = 1;
+        private int VK_F1 = 0x70; // F1 key code
+
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         public Form1()
         {
             // Check if folder exist. This work only for first run.
@@ -52,8 +66,23 @@ namespace SynthBorg
 
             InitializeComponent();
             InitializeVoices();
+
         }
 
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+
+            if (m.Msg == WM_HOTKEY)
+            {
+                int hotkeyEventId = m.WParam.ToInt32();
+                if (hotkeyEventId == HOTKEY_ID)
+                {
+                    // F1 hotkey was pressed, trigger the event
+                    stopall_btnClick(null, EventArgs.Empty);
+                }
+            }
+        }
         public async Task<string[]> ParseWordsFromFileAsync(string ignoredWordsFilePath)
         {
             try
@@ -94,10 +123,13 @@ namespace SynthBorg
         {
             LoadConfig();
             InitializeTTV();
+
+            RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_F1);
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             SaveConfig();
+            UnregisterHotKey(this.Handle, HOTKEY_ID);
         }
         private void SaveConfig()
         {
@@ -113,6 +145,7 @@ namespace SynthBorg
                 mod = checkBox1.Checked,
                 sub = checkBox2.Checked,
                 vip = checkBox3.Checked,
+                hotkey = VK_F1,
             };
 
             var json = JsonConvert.SerializeObject(config);
@@ -135,6 +168,7 @@ namespace SynthBorg
                     checkBox1.Checked = config.mod;
                     checkBox2.Checked = config.sub;
                     checkBox3.Checked = config.vip;
+                    VK_F1 = config.hotkey;
                 }
             }
         }
@@ -335,41 +369,58 @@ namespace SynthBorg
 
             return null;
         }
+        public void SendReply(string id, string message, string channel)
+        {
+            string formattedMessage = $"@reply-parent-msg-id={id} PRIVMSG #{channel} :{message}\r\n";
+            byte[] bytesToSend = Encoding.UTF8.GetBytes(formattedMessage);
+            ircClient.GetStream().Write(bytesToSend, 0, bytesToSend.Length);
+        }
         private async Task ProcessMessageAsync(string message)
         {
             try
             {
                 int lastColonIndex = message.LastIndexOf(':');
-                if (lastColonIndex >= 0 && lastColonIndex + 1 < message.Length)
+                if (!(lastColonIndex >= 0 && lastColonIndex + 1 < message.Length)) return;
+
+                string msgPayload = message.Substring(lastColonIndex + 1);
+                if (!msgPayload.StartsWith("!")) return;
+
+                // parse payload data
+                string tags = message.Substring(0, lastColonIndex);
+                string display_name = GetFieldValue(tags, "display-name").ToLower();
+
+                // permission check
+                bool is_mod = GetFieldValue(tags, "mod") == "1";
+                bool is_sub = GetFieldValue(tags, "subscriber") == "1";
+                bool is_vip = GetFieldValue(tags, "vip") != null;
+                // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
+
+                bool canSpeak = false;
+                if (checkBox1.Checked && is_mod) canSpeak = true;
+                if (checkBox2.Checked && is_vip) canSpeak = true;
+                if (checkBox3.Checked && is_sub) canSpeak = true;
+
+                if (IsWhitelistedUser(display_name)) canSpeak = true;
+                if (IsIgnoredUser(display_name)) canSpeak = false;
+
+                // Command's below
+                if (msgPayload.StartsWith("!say "))
                 {
-                    string msgPayload = message.Substring(lastColonIndex + 1);
-                    string tags = message.Substring(0, lastColonIndex);
-
-                    if (msgPayload.StartsWith("!say "))
-                    {
-                        // Extract the text to be spoken    
-                        string text = msgPayload.Substring(5);
-
-                        bool is_mod = GetFieldValue(tags, "mod") == "1";
-                        bool is_sub = GetFieldValue(tags, "subscriber") == "1";
-                        bool is_vip = GetFieldValue(tags, "vip") != null;
-                        // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
-
-                        string display_name = GetFieldValue(tags, "display-name").ToLower();
-
-                        bool canSpeak = false;
-
-                        if (checkBox1.Checked && is_mod) canSpeak = true;
-                        if (checkBox2.Checked && is_vip) canSpeak = true;
-                        if (checkBox3.Checked && is_sub) canSpeak = true;
-
-                        if (IsWhitelistedUser(display_name)) canSpeak = true;
-
-                        if (IsIgnoredUser(display_name)) canSpeak = false;
-
-                        if (canSpeak) await SpeakAsync(text);
-                    }
+                    string text = msgPayload.Substring(5);
+                    if (canSpeak) await SpeakAsync(text);
                 }
+
+                if (msgPayload.StartsWith("!me"))
+                {
+                    string message_id = GetFieldValue(tags, "id");
+
+                    if (canSpeak) message = ":white_check_mark:";
+                    else message = ":negative_squared_cross_mark:";
+
+                    SendReply(message_id, message, channelBox.Text);
+                }
+
+                
             }
             catch (Exception ex)
             {
@@ -425,7 +476,27 @@ namespace SynthBorg
             }
             return message;
         }
+        private int ShowHotkeyInputDialog()
+        {
+            using (var inputForm = new Form())
+            {
+                inputForm.StartPosition = FormStartPosition.CenterParent;
+                inputForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                inputForm.Text = "Press a key to set as hotkey";
 
+                int hotkey = 0x70;
+
+                inputForm.KeyDown += (sender, e) =>
+                {
+                    hotkey = (int)(e.KeyCode);
+                    inputForm.DialogResult = DialogResult.OK;
+                };
+
+                inputForm.ShowDialog();
+
+                return hotkey;
+            }
+        }
         private async void btnSay_Click(object sender, EventArgs e)
         {
             string message = txtMessage.Text.Trim();
@@ -441,6 +512,16 @@ namespace SynthBorg
 
                 switch (command)
                 {
+                    case "/attach":
+                        if (commandParts.Length > 0)
+                        {
+                            VK_F1 = ShowHotkeyInputDialog();
+
+                            UnregisterHotKey(this.Handle, HOTKEY_ID);
+                            RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_F1);
+                        }
+                        break;
+
                     case "/clear":
                         if (commandParts.Length > 0)
                         {
@@ -787,9 +868,9 @@ namespace SynthBorg
         {
 
         }
-
-        private void button1_Click(object sender, EventArgs e)
+        private void stopall_btnClick(object sender, EventArgs e)
         {
+            LogMessage("Force caneceling all speking task's.");
             synthesizer.SpeakAsyncCancelAll();
         }
     }
@@ -800,6 +881,7 @@ namespace SynthBorg
         public bool websocketinfo { get; set; }
         public bool mod { get; set; }
         public bool sub { get; set; }
+        public int hotkey { get; set; }
         public bool vip { get; set; }
         public string channel { get; set; }
         public string token { get; set; }

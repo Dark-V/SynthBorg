@@ -9,26 +9,24 @@ using Newtonsoft.Json;
 using System.IO.Compression;
 using System.Net.Sockets;
 using System.Threading;
-using System.Net;
-using SynthBorg;
 using System.Diagnostics;
-using System.Text;
-using System.Security.Policy;
 using System.Text.RegularExpressions;
 
 namespace SynthBorg
 {
     public partial class Form1 : Form
-    {
-        private const long MaxLogFileSize = 1073741824; // Maximum log file size in bytes (128 MB)
+    {   
+        private const long MaxLogFileSize = 1073741824; // Maximum log file size in bytes (1 GB)
         static readonly string logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SynthBorg");
         static string configPath = Path.Combine(logDirectory,  "config.json");
         static string logFilePath = Path.Combine(logDirectory, "log.txt");
+        static string ignoredWordsFilePath = Path.Combine(logDirectory, "ignoredWords.txt");
 
         private List<string> messageHistory = new List<string>(); // Maintain a list to store the message history
         private int messageIndex = -1; // Track the index of the current message in the history
         private bool WebSocketInfo = true;
 
+        private List<string> ignoredWords = new List<string>(); // Maintain a list all prohibted words
         private SpeechSynthesizer synthesizer;
 
         private TcpClient ircClient;
@@ -37,17 +35,41 @@ namespace SynthBorg
 
         public Form1()
         {
-            // Initialize log writer
+            // Check if folder exist. This work only for first run.
             if (!Directory.Exists(logDirectory))
             {
                 Directory.CreateDirectory(logDirectory);
 
                 using (File.Create(configPath)) {}
                 using (File.Create(logFilePath)) {}
+                using (File.Create(ignoredWordsFilePath)) {}
+            }
+
+            if (File.Exists(ignoredWordsFilePath))
+            {
+                _ = ParseWordsFromFileAsync(ignoredWordsFilePath);
             }
 
             InitializeComponent();
             InitializeVoices();
+        }
+
+        public async Task<string[]> ParseWordsFromFileAsync(string ignoredWordsFilePath)
+        {
+            try
+            {
+                using (var streamReader = new StreamReader(ignoredWordsFilePath))
+                {
+                    var content = await Task.Run(() => streamReader.ReadToEnd()).ConfigureAwait(false);
+                    ignoredWords = new List<string>(content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                    return ignoredWords.ToArray();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError($"Error when loading ignored words list: {ex.Message}");
+                return new string[0];
+            }
         }
 
         private void InitializeTTV()
@@ -323,7 +345,7 @@ namespace SynthBorg
                     string msgPayload = message.Substring(lastColonIndex + 1);
                     string tags = message.Substring(0, lastColonIndex);
 
-                    if (msgPayload.StartsWith("!say"))
+                    if (msgPayload.StartsWith("!say "))
                     {
                         // Extract the text to be spoken    
                         string text = msgPayload.Substring(5);
@@ -333,7 +355,7 @@ namespace SynthBorg
                         bool is_vip = GetFieldValue(tags, "vip") != null;
                         // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
 
-                        string display_name = GetFieldValue(tags, "display-name");
+                        string display_name = GetFieldValue(tags, "display-name").ToLower();
 
                         bool canSpeak = false;
 
@@ -342,6 +364,8 @@ namespace SynthBorg
                         if (checkBox3.Checked && is_sub) canSpeak = true;
 
                         if (IsWhitelistedUser(display_name)) canSpeak = true;
+
+                        if (IsIgnoredUser(display_name)) canSpeak = false;
 
                         if (canSpeak) await SpeakAsync(text);
                     }
@@ -356,6 +380,11 @@ namespace SynthBorg
         private bool IsWhitelistedUser(string username)
         {
             List<string> whitelistedUsers = GetWhitelistedUsers();
+            return whitelistedUsers.Contains(username);
+        }
+        private bool IsIgnoredUser(string username)
+        {
+            List<string> whitelistedUsers = GetIgnoredUsers();
             return whitelistedUsers.Contains(username);
         }
 
@@ -373,6 +402,8 @@ namespace SynthBorg
                     synthesizer.SelectVoice(selectedVoice);
                     synthesizer.Rate = selectedSpeed;
 
+                    ReplaceIgnoredWords(message);
+
                     await Task.Run(() => synthesizer.SpeakAsync(message));
                     LogMessage("Spoke: " + message);
                 }
@@ -382,6 +413,16 @@ namespace SynthBorg
                 LogError(ex.ToString());
                 MessageBox.Show("An error occurred while test speaking the message.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        public string ReplaceIgnoredWords(string message)
+        {
+            foreach (var word in ignoredWords)
+            {
+                string pattern = @"\b" + Regex.Escape(word) + @"\b";
+                message = Regex.Replace(message, pattern, "*", RegexOptions.IgnoreCase);
+            }
+            return message;
         }
 
         private async void btnSay_Click(object sender, EventArgs e)
@@ -532,6 +573,7 @@ namespace SynthBorg
             {
                 try
                 {
+                    userId = userId.ToLower();
                     // Read the existing config file
                     string json = File.ReadAllText(configPath);
                     var config = JsonConvert.DeserializeObject<Config>(json) ?? new Config();
@@ -601,6 +643,7 @@ namespace SynthBorg
             {
                 try
                 {
+                    userId = userId.ToLower();  
                     // Read the existing config file
                     string json = File.ReadAllText(configPath);
                     var config = JsonConvert.DeserializeObject<Config>(json) ?? new Config();
@@ -702,14 +745,51 @@ namespace SynthBorg
 
             if (result == DialogResult.OK)
             {
-                MessageBox.Show("You need to copy your ACCESS_TOKEN " + Environment.NewLine +
-                    "For example http://localhost:3000/#access_token=xxqagi8o1czkv6vjffff9s33g0pfwj&scope=chat%3Aread+chat%3Aedit&token_type=bearer"
-                    + Environment.NewLine + "So that you're key: \"xxqagi8o1czkv6vjffff9s33g0pfwj\"");
+                MessageBox.Show("You wil get 404, that OK. Copy and paste url to input" + Environment.NewLine
+                     + "You need url like this http://localhost:3000/#access_token=xxqagi8o1czkv6vjffff9s33g0pfwj&scope=chat%3Aread+chat%3Aedit&token_type=bearer");
 
                 Process.Start(new ProcessStartInfo(urlf) { UseShellExecute = true });
+
+                tokenBox.Text = System.Text.RegularExpressions.Regex.Match(InputDialog("Paste url here:"), @"(?<=#access_token=)[^&]+").Value;
+
             }
                 
+        }
+        private string InputDialog(string prompt)
+        {
+            Form inputForm = new Form()
+            {
+                Width = 300,
+                Height = 150,
+                Text = "Input Dialog"
+            };
 
+            Label label = new Label() { Left = 20, Top = 20, Text = prompt };
+            TextBox textBox = new TextBox() { Left = 20, Top = 50, Width = 250 };
+            Button buttonOk = new Button() { Text = "OK", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+            Button buttonCancel = new Button() { Text = "Cancel", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
+
+            buttonOk.Click += (sender, e) => inputForm.Close();
+
+            inputForm.Controls.Add(label);
+            inputForm.Controls.Add(textBox);
+            inputForm.Controls.Add(buttonOk);
+            inputForm.Controls.Add(buttonCancel);
+
+            inputForm.AcceptButton = buttonOk;
+            inputForm.CancelButton = buttonCancel;
+
+            return inputForm.ShowDialog() == DialogResult.OK ? textBox.Text : string.Empty;
+        }
+
+        private void groupBox4_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            synthesizer.SpeakAsyncCancelAll();
         }
     }
 

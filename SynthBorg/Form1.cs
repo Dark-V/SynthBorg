@@ -75,7 +75,7 @@ namespace SynthBorg
         private void InitializeTTV()
         {
             string channel = channelBox.Text; // darkv__
-            string token = "oauth:" + tokenBox.Text; // oauth:t7db2pnotdwis66x4h6orvbtc9l49i
+            string token = "oauth:" + tokenBox.Text; // oauth:t7db2pnotdwis66x4h6offftc9l49i
 
             if (channel.Length > 0 && token.Length > 0)
                 _ = AuthenticateAsync(channel, token, channel);

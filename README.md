@@ -18,14 +18,14 @@
 
 ## RU:
 - Это программа позволяет читать чат от вашего аккаунта, используя систему авторизации TTV.
-- Если пользователь напишет в чат - !say TEXT, то программа проверит разрешенно ли пользователю использовать команду, если у пользователя достаточно привелегий - то будет озвучена фраза из его сообщения.
+- Если пользователь напишет в чат - !say TEXT, то программа проверит разрешено ли пользователю использовать команду, если у пользователя достаточно привилегий - то будет озвучена фраза из его сообщения.
 
-- Привелегии доступа настраиваются внутри программы.
-- Программа имеет в себе настриваемый белый и черный список пользователей.
+- Привилегии доступа настраиваются внутри программы.
+- Программа имеет в себе настраиваемый белый и черный список пользователей.
 - Программа имеет возможность добавить список заблокированных слов, используя файл "C:\Users\\%username%\Documents\SynthBorg\ignoredWords.txt".
-- Например имея в файле список слов, сообщение 	**"wakan is loz"** будет озвученно как 	**"\* is \*"**:
-  wakan
-  loz
+- Например имея в файле список слов, сообщение  **"wakan is loz"** будет озвучено как  **"\* is \*"**: <br/>
+  wakan <br/>
+  loz <br/>
 
 ## EN:
 - This program allows read chat using your account from TTV. Made by using TTV authorization system.
@@ -34,6 +34,6 @@
 - Access privileges are configured within the program.
 - Program has a customizable white and black list for users.
 - Program has the ability to add a list of blocked words using the file "C:\Users\\%username%\Documents\SynthBorg\ignoredWords.txt".
-- For example, having a list of words in the file, the message 	**"wakan is loz"** will be voiced as 	**"\* is \*"**:
-   wakan
-   loz
+- For example, having a list of words in the file, the message 	**"wakan is loz"** will be voiced as 	**"\* is \*"**: <br/>
+   wakan <br/>
+   loz <br/>

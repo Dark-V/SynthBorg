@@ -580,13 +580,6 @@ namespace SynthBorg
                         }
                         break;
 
-                    case "/testit":
-                        if (commandParts.Length > 0)
-                        {
-                            await SpeakAsync("Жопа. Укуси мой блестящий железный зад!");
-                        }
-                        break;
-
                     case "/reload":
                         if (commandParts.Length > 0)
                         {
@@ -608,72 +601,94 @@ namespace SynthBorg
                         }
                         break;
 
-                    case "/ignore":
-                        if (commandParts.Length > 1)
+                    case "/blocklist":
+
+                        if (commandParts.Length == 1)
                         {
-                            string username = commandParts[1];
+                            LogError("blocklist command need type of usage - [add/del/show]");
+                            return;
+                        }
+
+                        if (commandParts[1] == "add")
+                        {
+                            if (commandParts.Length < 3)
+                            {
+                                LogError("blocklist add command need nickname as argument. Nickname not exist.");
+                                return;
+                            }
+
+                            string username = commandParts[2];
                             await AddIgnoredUserAsync(username);
                         }
-                        break;
-
-                    case "/pardon":
-                        if (commandParts.Length > 1)
+                        if (commandParts[1] == "del")
                         {
-                            string username = commandParts[1];
+                            if (commandParts.Length < 3)
+                            {
+                                LogError("blocklist del command need nickname as argument. Nickname not exist.");
+                                return;
+                            }
+
+                            string username = commandParts[2];
                             await RemoveIgnoredUserAsync(username);
                         }
-                        break;
-
-                    case "/blocklist":
-                        if (commandParts.Length > 0)
+                        if (commandParts[1] == "show")
                         {
                             List<string> ignoredUsers = GetIgnoredUsers();
                             string ignoredUsersList = string.Join(Environment.NewLine, ignoredUsers);
                             LogTextBoxOnly("Current list of blocked users:" + Environment.NewLine + ignoredUsersList + Environment.NewLine);
                         }
                         break;
-
                     case "/whitelist":
-                        if (commandParts.Length > 1)
+
+                        if (commandParts.Length == 1)
                         {
-                            string username = commandParts[1];
+                            LogError("Whitelist command need type of usage - [add/del/show]");
+                            return;
+                        }
+
+                        if (commandParts[1] == "add")
+                        {
+                            if (commandParts.Length < 3)
+                            {
+                                LogError("Whitelist add command need nickname as argument. Nickname not exist.");
+                                return;
+                            }
+
+                            string username = commandParts[2];
                             await AddWhitelistedUserAsync(username);
                         }
-                        break;
-
-                    case "/unwhitelist":
-                        if (commandParts.Length > 1)
+                        if (commandParts[1] == "del")
                         {
-                            string username = commandParts[1];
+                            if (commandParts.Length < 3)
+                            {
+                                LogError("Whitelist del command need nickname as argument. Nickname not exist.");
+                                return;
+                            }
+
+                            string username = commandParts[2];
                             await RemoveWhitelistedUserAsync(username);
                         }
-                        break;
-
-                    case "/allowlist":
-                        if (commandParts.Length > 0)
+                        if (commandParts[1] == "show")
                         {
                             List<string> whitelistedUsers = GetWhitelistedUsers();
                             string whitelistedUsersList = string.Join(Environment.NewLine, whitelistedUsers);
                             LogTextBoxOnly("Current list of whitelisted users:" + Environment.NewLine + whitelistedUsersList + Environment.NewLine);
                         }
                         break;
+
                     case "/help":
                         if (commandParts.Length > 0)
                         {
                             string helpText = "Доступные команды:" + Environment.NewLine +
+                                "/attach - Изменить клавишу хоткея пропуска tts озвучек" + Environment.NewLine +
                                 "/clear - Очистить окно вывода" + Environment.NewLine +
                                 "/ttv_info - Включает или выключает подробный вывод TTV" + Environment.NewLine +
-                                "/testit - Произнести тестовое сообщение" + Environment.NewLine +
-                                "/reload - Перезагрузить подклбчение к TTV" + Environment.NewLine +
-                                "/say [сообщение] - Произнести указанное сообщение" + Environment.NewLine +
-                                "/ignore [имя_пользователя] - Игнорировать указанного пользователя" + Environment.NewLine +
-                                "/pardon [имя_пользователя] - Удалить пользователя из списка игнорируемых" + Environment.NewLine +
-                                "/blocklist - Показать текущий список заблокированных пользователей" + Environment.NewLine +
-                                "/whitelist [имя_пользователя] - Добавить указанного пользователя в белый список" + Environment.NewLine +
-                                "/unwhitelist [имя_пользователя] - Удалить указанного пользователя из белого списка" + Environment.NewLine +
                                 "/save - Сохранить текущие настройки конфигурации" + Environment.NewLine +
-                                "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me" + Environment.NewLine +
-                                "/allowlist - Показать текущий список разрешенных пользователей";
+                                "/reload - Перезагрузить подключение к TTV" + Environment.NewLine +
+                                "/say [сообщение] - Произнести указанное сообщение внутри приложения" + Environment.NewLine +
+                                "/blocklist [add/del/show] [имя_пользователя] Добавить/удалить/показать список пользователь игнор списка" + Environment.NewLine +
+                                "/whitelist [add/del/show] [имя_пользователя] - Добавить/удалить/показать список пользователь белого списка" + Environment.NewLine +
+                                "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me";
 
                             LogTextBoxOnly(helpText);
                         }

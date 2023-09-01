@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Runtime.Remoting.Channels;
 using System.Runtime.InteropServices;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace SynthBorg
 {
@@ -35,6 +36,10 @@ namespace SynthBorg
         private TcpClient ircClient;
         private StreamReader reader;
         private StreamWriter writer;
+
+        // for !me
+        private string voice_allow_msg = "ALLOWED";
+        private string voice_not_allow_msg = "NOT ALLOWED";
 
         // hotkey code
         private const int MOD_SHIFT = 0x0004;
@@ -145,6 +150,8 @@ namespace SynthBorg
                 mod = checkBox1.Checked,
                 sub = checkBox2.Checked,
                 vip = checkBox3.Checked,
+                voice_allow_msg = voice_allow_msg,
+                voice_not_allow_msg = voice_not_allow_msg,
                 hotkey = VK_F1,
             };
 
@@ -168,6 +175,8 @@ namespace SynthBorg
                     checkBox1.Checked = config.mod;
                     checkBox2.Checked = config.sub;
                     checkBox3.Checked = config.vip;
+                    voice_allow_msg = config.voice_allow_msg;
+                    voice_not_allow_msg = config.voice_not_allow_msg;
                     VK_F1 = config.hotkey;
                 }
             }
@@ -214,7 +223,13 @@ namespace SynthBorg
             CheckLogFileSize();
             UpdateLogTextBox(logMessage);
         }
+        public void LogTextBoxOnly(string log)
+        {
+            log_textBox.Text += log + Environment.NewLine;
 
+            log_textBox.Select(log_textBox.TextLength, 0);
+            log_textBox.ScrollToCaret();
+        }
         public void LogError(string error)
         {
             string logError = $"[ERROR] {DateTime.Now}: {error}";
@@ -379,22 +394,24 @@ namespace SynthBorg
         {
             try
             {
-                int lastColonIndex = message.LastIndexOf(':');
-                if (!(lastColonIndex >= 0 && lastColonIndex + 1 < message.Length)) return;
+                string[] parts = message.Split(new string[] { "PRIVMSG" }, StringSplitOptions.None);
+                if (parts.Length < 2) return;
 
-                string msgPayload = message.Substring(lastColonIndex + 1);
-                if (!msgPayload.StartsWith("!")) return;
+                string msgPayload = parts[1].Substring(parts[1].IndexOf(':') + 1).ToLower();
+                if (!msgPayload.StartsWith("!")) return;    
 
                 // parse payload data
-                string tags = message.Substring(0, lastColonIndex);
+                string tags = parts[0];
                 string display_name = GetFieldValue(tags, "display-name").ToLower();
+
+                LogMessage(GetFieldValue(tags, "mod"));
 
                 // permission check
                 bool is_mod = GetFieldValue(tags, "mod") == "1";
                 bool is_sub = GetFieldValue(tags, "subscriber") == "1";
                 bool is_vip = GetFieldValue(tags, "vip") != null;
-                // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
-
+               // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
+                    
                 bool canSpeak = false;
                 if (checkBox1.Checked && is_mod) canSpeak = true;
                 if (checkBox2.Checked && is_vip) canSpeak = true;
@@ -414,8 +431,8 @@ namespace SynthBorg
                 {
                     string message_id = GetFieldValue(tags, "id");
 
-                    if (canSpeak) message = ":white_check_mark:";
-                    else message = ":negative_squared_cross_mark:";
+                    message = voice_not_allow_msg;
+                    if (canSpeak) message = voice_allow_msg;
 
                     SendReply(message_id, message, channelBox.Text);
                 }
@@ -483,6 +500,7 @@ namespace SynthBorg
                 inputForm.StartPosition = FormStartPosition.CenterParent;
                 inputForm.FormBorderStyle = FormBorderStyle.FixedDialog;
                 inputForm.Text = "Press a key to set as hotkey";
+                inputForm.Width = 400;
 
                 int hotkey = 0x70;
 
@@ -521,7 +539,25 @@ namespace SynthBorg
                             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_F1);
                         }
                         break;
+                    case "/me":
+                        if (commandParts.Length > 1)
+                        {
+                            if (commandParts[1] == "allow")
+                            {
+                                string text = string.Join(" ", commandParts.Skip(2));
+                                text = text.Trim('"'); // remove quotation marks
+                                voice_allow_msg = text;
+                            }
+                            if (commandParts[1] == "deny")
+                            {
+                                string text = string.Join(" ", commandParts.Skip(2));
+                                text = text.Trim('"'); // remove quotation marks
+                                voice_not_allow_msg = text;
+                            }
 
+                            LogMessage($"voice_allow_msg is \"{voice_allow_msg}\" and voice_not_allow_msg is \"{voice_not_allow_msg}\"");
+                        }
+                        break;
                     case "/clear":
                         if (commandParts.Length > 0)
                         {
@@ -593,7 +629,7 @@ namespace SynthBorg
                         {
                             List<string> ignoredUsers = GetIgnoredUsers();
                             string ignoredUsersList = string.Join(Environment.NewLine, ignoredUsers);
-                            log_textBox.Text += "Current list of blocked users:" + Environment.NewLine + ignoredUsersList + Environment.NewLine;
+                            LogTextBoxOnly("Current list of blocked users:" + Environment.NewLine + ignoredUsersList + Environment.NewLine);
                         }
                         break;
 
@@ -618,7 +654,7 @@ namespace SynthBorg
                         {
                             List<string> whitelistedUsers = GetWhitelistedUsers();
                             string whitelistedUsersList = string.Join(Environment.NewLine, whitelistedUsers);
-                            log_textBox.Text += "Current list of whitelisted users:" + Environment.NewLine + whitelistedUsersList + Environment.NewLine;
+                            LogTextBoxOnly("Current list of whitelisted users:" + Environment.NewLine + whitelistedUsersList + Environment.NewLine);
                         }
                         break;
                     case "/help":
@@ -636,9 +672,10 @@ namespace SynthBorg
                                 "/whitelist [имя_пользователя] - Добавить указанного пользователя в белый список" + Environment.NewLine +
                                 "/unwhitelist [имя_пользователя] - Удалить указанного пользователя из белого списка" + Environment.NewLine +
                                 "/save - Сохранить текущие настройки конфигурации" + Environment.NewLine +
+                                "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me" + Environment.NewLine +
                                 "/allowlist - Показать текущий список разрешенных пользователей";
 
-                            log_textBox.Text += helpText + Environment.NewLine;
+                            LogTextBoxOnly(helpText);
                         }
                         break;
 
@@ -789,7 +826,6 @@ namespace SynthBorg
                 }
             });
         }
-
         private List<string> GetIgnoredUsers()
         {
             try
@@ -846,10 +882,11 @@ namespace SynthBorg
                 Text = "Input Dialog"
             };
 
+
             Label label = new Label() { Left = 20, Top = 20, Text = prompt };
-            TextBox textBox = new TextBox() { Left = 20, Top = 50, Width = 250 };
-            Button buttonOk = new Button() { Text = "OK", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.OK };
-            Button buttonCancel = new Button() { Text = "Cancel", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
+            System.Windows.Forms.TextBox textBox = new System.Windows.Forms.TextBox() { Left = 20, Top = 50, Width = 250 };
+            System.Windows.Forms.Button buttonOk = new System.Windows.Forms.Button() { Text = "OK", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+            System.Windows.Forms.Button buttonCancel = new System.Windows.Forms.Button() { Text = "Cancel", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
 
             buttonOk.Click += (sender, e) => inputForm.Close();
 
@@ -873,20 +910,5 @@ namespace SynthBorg
             LogMessage("Force caneceling all speking task's.");
             synthesizer.SpeakAsyncCancelAll();
         }
-    }
-
-    public class Config
-    {
-        public string Voice { get; set; }
-        public bool websocketinfo { get; set; }
-        public bool mod { get; set; }
-        public bool sub { get; set; }
-        public int hotkey { get; set; }
-        public bool vip { get; set; }
-        public string channel { get; set; }
-        public string token { get; set; }
-        public int Speed { get; set; }
-        public List<string> IgnoredUsers { get; set; }
-        public List<string> WhitelistedUsers { get; set; }
     }
 }

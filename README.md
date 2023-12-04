@@ -3,20 +3,17 @@
 ![Screenshot_2](https://github.com/Dark-V/SynthBorg/assets/58254635/233a8b89-97dc-43a9-8b3b-ab39a68d17ba)
 
 Доступные команды: <br/>
-/clear - Очистить окно вывода <br/>
-/ttv_info - Включает или выключает подробный вывод TTV <br/>
-/attach - Перепривязка клавишы на STOP ALL (shift + re-attached btn) <br/>
-/testit - Произнести тестовое сообщение <br/>
-/reload - Перезагрузить подклбчение к TTV <br/>
-/say [сообщение] - Произнести указанное сообщение <br/>
-/ignore [имя_пользователя] - Игнорировать указанного пользователя <br/>
-/pardon [имя_пользователя] - Удалить пользователя из списка игнорируемых <br/>
-/blocklist - Показать текущий список заблокированных пользователей <br/>
-/whitelist [имя_пользователя] - Добавить указанного пользователя в белый список <br/>
-/unwhitelist [имя_пользователя] - Удалить указанного пользователя из белого списка <br/>
-/save - Сохранить текущие настройки конфигурации <br/>
+/attach - Изменить клавишу хоткея пропуска tts озвучек  <br/>
+/clear - Очистить окно вывода  <br/>
+/ttv_info - Включает или выключает подробный вывод TTV  <br/>
+/save - Сохранить текущие настройки конфигурации  <br/>
+/reload - Перезагрузить подключение к TTV  <br/>
+/say [сообщение] - Произнести указанное сообщение внутри приложения  <br/>
+/blocklist [add/del/show] [имя_пользователя] Добавить/удалить/показать список пользователь игнор списка  <br/>
+/whitelist [add/del/show] [имя_пользователя] - Добавить/удалить/показать список пользователь белого списка  <br/>
 /me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me <br/>
-/allowlist - Показать текущий список разрешенных пользователей <br/>
+
+Скачать можно здесь - [SynthBorg.exe](https://github.com/Dark-V/SynthBorg/releases)
 
 ## RU:
 - Это программа позволяет читать чат от вашего аккаунта, используя систему авторизации TTV.
@@ -28,19 +25,8 @@
 - Например имея в файле список слов, сообщение  **"wakan is loz"** будет озвучено как  **"\* is \*"**: <br/>
   wakan <br/>
   loz <br/>
-
-## EN:
-- This program allows read chat using your account from TTV. Made by using TTV authorization system.
-- If user write to chat - !say TEXT, then the program will check if the user is allowed to use the command, if the user has enough privileges, then phrase will be announced using TTS.
-
-- Access privileges are configured within the program.
-- Program has a customizable white and black list for users.
-- Program has the ability to add a list of blocked words using the file "C:\Users\\%username%\Documents\SynthBorg\ignoredWords.txt".
-- For example, having a list of words in the file, the message 	**"wakan is loz"** will be voiced as 	**"\* is \*"**: <br/>
-   wakan <br/>
-   loz <br/>
-
-## Setup/Запуск:
+  
+## Запуск:
 1. Скачайте программу, положите exe файл в удобное вам место, например рабочий стол.
 2. Откройте программу, в поле "Channel" укажите свой ник канала.
 3. Нажмите на кнопку GEN, возле Token поля, вам будут выведенен текст, ЧИТАЙТЕ что там написанно!

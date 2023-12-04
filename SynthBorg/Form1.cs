@@ -15,6 +15,12 @@ using System.Text;
 using System.Runtime.Remoting.Channels;
 using System.Runtime.InteropServices;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using System.Net;
+using System;
+using System.Net;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+using Newtonsoft.Json.Linq;
 
 namespace SynthBorg
 {
@@ -36,6 +42,9 @@ namespace SynthBorg
         private TcpClient ircClient;
         private StreamReader reader;
         private StreamWriter writer;
+
+        private HttpListener listener;
+        public string token;
 
         // for !me
         private string voice_allow_msg = "ALLOWED";
@@ -417,6 +426,7 @@ namespace SynthBorg
                 if (checkBox2.Checked && is_vip) canSpeak = true;
                 if (checkBox3.Checked && is_sub) canSpeak = true;
 
+                if (channelBox.Text.ToLower() == display_name) canSpeak = true;
                 if (IsWhitelistedUser(display_name)) canSpeak = true;
                 if (IsIgnoredUser(display_name)) canSpeak = false;
 
@@ -464,7 +474,7 @@ namespace SynthBorg
                 {
                     // Get the selected voice and speed values
                     string selectedVoice = cboVoices.SelectedItem.ToString();
-                    int selectedSpeed = int.TryParse(cboSpeed.SelectedItem?.ToString(), out int speed) ? speed : 1;
+                    int selectedSpeed = int.TryParse(cboSpeed.SelectedItem?.ToString(), out int speed) ? speed : 2;
 
                     // Set the voice and speed
                     synthesizer.SelectVoice(selectedVoice);
@@ -540,7 +550,7 @@ namespace SynthBorg
                         }
                         break;
                     case "/me":
-                        if (commandParts.Length > 1)
+                        if (commandParts.Length > 2)
                         {
                             if (commandParts[1] == "allow")
                             {
@@ -557,6 +567,10 @@ namespace SynthBorg
 
                             LogMessage($"voice_allow_msg is \"{voice_allow_msg}\" and voice_not_allow_msg is \"{voice_not_allow_msg}\"");
                         }
+                        else
+                        {
+                            LogError("me command need 3 arguments");
+                        }
                         break;
                     case "/clear":
                         if (commandParts.Length > 0)
@@ -569,7 +583,7 @@ namespace SynthBorg
                             if (commandParts.Length > 0)
                             {
                                 SaveConfig();
-                                LogMessage($"Sucessfuly saved your data.");
+                                LogMessage($"Successful saved your data.");
                             }
                         break;
 
@@ -870,50 +884,80 @@ namespace SynthBorg
                 return new List<string>();
             }
         }
-        private void buttonTokenGen_Click(object sender, EventArgs e)
+
+        private async void buttonTokenGen_Click(object sender, EventArgs e)
         {
             string urlf = "https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=livbg1uzwm54a5wjkbqaht5l60elv3&redirect_uri=http://localhost:3000&scope=chat:read+chat:edit";
 
-            DialogResult result = MessageBox.Show("Do you want to generate new token?", "Token generation", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+            DialogResult result = MessageBox.Show("Вы точно хотите создать новый токен?", "Token generation", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
 
             if (result == DialogResult.OK)
             {
-                MessageBox.Show("You wil get 404, that OK. Copy and paste url to input" + Environment.NewLine
-                     + "You need url like this http://localhost:3000/#access_token=xxqagi8o1czkv6vjffff9s33g0pfwj&scope=chat%3Aread+chat%3Aedit&token_type=bearer");
+                listener = new HttpListener();
+                listener.Prefixes.Add("http://localhost:3000/");
+                listener.Start();
 
                 Process.Start(new ProcessStartInfo(urlf) { UseShellExecute = true });
 
-                tokenBox.Text = System.Text.RegularExpressions.Regex.Match(InputDialog("Paste url here:"), @"(?<=#access_token=)[^&]+").Value;
+                await Task.Factory.StartNew(() =>
+                {
+                    while (listener.IsListening)
+                    {
+                        var context = listener.GetContext();
+                        context.Response.ContentType = "text/html; charset=UTF-8";
+                        if (context.Request.HttpMethod == "GET")
+                        {
+                            string responseString = @"
+                        <HTML><BODY>
+                        <script>
+                            var hash = window.location.hash.substr(1);
+                            var xhr = new XMLHttpRequest();
+                            xhr.open('POST', '/', true);
+                            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                            xhr.send(hash);
+                            xhr.onload = function () {
+                                if (xhr.status == 200) {
+                                    document.body.innerHTML = 'Токен получен. Вы можете вернуться в программу и закрыть эту вкладку.';
+                                }
+                            }
+                        </script>
+                        </BODY></HTML>";
+                            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            context.Response.ContentLength64 = buffer.Length;
+                            System.IO.Stream output = context.Response.OutputStream;
+                            output.Write(buffer, 0, buffer.Length);
+                            output.Close();
+                        }
+                        else if (context.Request.HttpMethod == "POST")
+                        {
+                            System.IO.Stream body = context.Request.InputStream;
+                            System.Text.Encoding encoding = context.Request.ContentEncoding;
+                            System.IO.StreamReader reader = new System.IO.StreamReader(body, encoding);
+                            context.Response.ContentType = "text/html; charset=UTF-8";
 
+                            string s = reader.ReadToEnd();
+                            token = Regex.Match(s, @"access_token=([^&]*)").Groups[1].Value;
+                            reader.Close();
+                            body.Close();
+
+                            if (!string.IsNullOrEmpty(token))
+                            {
+                                Invoke(new Action(() => tokenBox.Text = token));
+                            }
+
+                            string responseString = "<HTML><BODY>Токен получен. Вы можете вернуться в программу и закрыть эту вкладку.</BODY></HTML>";
+                            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            context.Response.ContentLength64 = buffer.Length;
+                            System.IO.Stream output = context.Response.OutputStream;
+                            output.Write(buffer, 0, buffer.Length);
+                            output.Close();
+
+                            listener.Stop();
+                            SaveConfig();
+                        }
+                    }
+                });
             }
-                
-        }
-        private string InputDialog(string prompt)
-        {
-            Form inputForm = new Form()
-            {
-                Width = 300,
-                Height = 150,
-                Text = "Input Dialog"
-            };
-
-
-            Label label = new Label() { Left = 20, Top = 20, Text = prompt };
-            System.Windows.Forms.TextBox textBox = new System.Windows.Forms.TextBox() { Left = 20, Top = 50, Width = 250 };
-            System.Windows.Forms.Button buttonOk = new System.Windows.Forms.Button() { Text = "OK", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.OK };
-            System.Windows.Forms.Button buttonCancel = new System.Windows.Forms.Button() { Text = "Cancel", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
-
-            buttonOk.Click += (sender, e) => inputForm.Close();
-
-            inputForm.Controls.Add(label);
-            inputForm.Controls.Add(textBox);
-            inputForm.Controls.Add(buttonOk);
-            inputForm.Controls.Add(buttonCancel);
-
-            inputForm.AcceptButton = buttonOk;
-            inputForm.CancelButton = buttonCancel;
-
-            return inputForm.ShowDialog() == DialogResult.OK ? textBox.Text : string.Empty;
         }
 
         private void groupBox4_Enter(object sender, EventArgs e)

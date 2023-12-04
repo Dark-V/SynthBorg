@@ -164,6 +164,7 @@
             // 
             this.tokenBox.Location = new System.Drawing.Point(76, 24);
             this.tokenBox.Name = "tokenBox";
+            this.tokenBox.PasswordChar = '*';
             this.tokenBox.Size = new System.Drawing.Size(100, 22);
             this.tokenBox.TabIndex = 4;
             // 

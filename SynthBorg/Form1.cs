@@ -21,6 +21,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Newtonsoft.Json.Linq;
+using System.Drawing;
 
 namespace SynthBorg
 {
@@ -80,7 +81,7 @@ namespace SynthBorg
 
             InitializeComponent();
             InitializeVoices();
-
+            CheckUpdatesOnGit(false);
         }
 
         protected override void WndProc(ref Message m)
@@ -525,6 +526,63 @@ namespace SynthBorg
                 return hotkey;
             }
         }
+        private async void CheckUpdatesOnGit(bool isManual)
+        {
+            try
+            {
+                string url = "https://api.github.com/repos/Dark-V/SynthBorg/releases/latest";
+                string returnMsg = "Что-то пошло не так...";
+                bool isNeedUpdate = false;
+
+                using (WebClient client = new WebClient())
+                {
+                    client.Headers.Add("User-Agent", "SynthBorg_API");
+                    string json = client.DownloadString(url);
+                    JObject release = JObject.Parse(json);
+
+                    // Get the latest release tag (version number)
+                    string latestVersion = (string)release["tag_name"];
+
+                    if (!latestVersion.Contains("release"))
+                    {
+                        Version newVersion = new Version(latestVersion);
+                        Version currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+
+                        // LogMessage(newVersion.ToString());
+                        // LogMessage(currentVersion.ToString());
+
+                        if (newVersion > currentVersion)
+                        {
+                            returnMsg = "Обновление доступно! Пожалуйста обновитесь";
+                            isNeedUpdate = true;
+                        }
+                        else if (isManual) returnMsg = "Это последняя версия! UwU";
+                    }
+                    else
+                    {
+                        returnMsg = "Ваша версия устарела! Пожалуйста обновитесь!";
+                        isNeedUpdate = true;
+                    }
+
+                    if (isNeedUpdate || isManual)
+                    {
+                        DialogResult dialogResult = MessageBox.Show(returnMsg, "Обновление?", MessageBoxButtons.OKCancel);
+                        if (dialogResult == DialogResult.OK && isNeedUpdate)
+                        {
+                            System.Diagnostics.Process.Start("https://github.com/Dark-V/SynthBorg/releases");
+                            this.Close();
+                        }
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Что-то пошло не так..! А именно: {ex.Message}");
+            }
+
+
+        }
         private async void btnSay_Click(object sender, EventArgs e)
         {
             string message = txtMessage.Text.Trim();
@@ -548,6 +606,9 @@ namespace SynthBorg
                             UnregisterHotKey(this.Handle, HOTKEY_ID);
                             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_F1);
                         }
+                        break;
+                    case "/update":
+                            CheckUpdatesOnGit(true);
                         break;
                     case "/me":
                         if (commandParts.Length > 2)
@@ -702,7 +763,8 @@ namespace SynthBorg
                                 "/say [сообщение] - Произнести указанное сообщение внутри приложения" + Environment.NewLine +
                                 "/blocklist [add/del/show] [имя_пользователя] Добавить/удалить/показать список пользователь игнор списка" + Environment.NewLine +
                                 "/whitelist [add/del/show] [имя_пользователя] - Добавить/удалить/показать список пользователь белого списка" + Environment.NewLine +
-                                "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me";
+                                "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me" + Environment.NewLine +
+                                "/update - Проверить наличие обновления SynthBorg'a.";
 
                             LogTextBoxOnly(helpText);
                         }

@@ -13,7 +13,7 @@
 /whitelist [add/del/show] [имя_пользователя] - Добавить/удалить/показать список пользователь белого списка  <br/>
 /me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me <br/>
 
-Скачать можно здесь - [SynthBorg.exe](https://github.com/Dark-V/SynthBorg/releases).
+Скачать можно здесь - [SynthBorg.exe](https://github.com/Dark-V/SynthBorg/releases)
 
 ## RU:
 - Это программа позволяет читать чат от вашего аккаунта, используя систему авторизации TTV.

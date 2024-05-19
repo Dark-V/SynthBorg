@@ -12,38 +12,47 @@ using System.Threading;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Text;
-using System.Runtime.Remoting.Channels;
 using System.Runtime.InteropServices;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using System.Net;
-using System;
-using System.Net;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
 using Newtonsoft.Json.Linq;
-using System.Drawing;
+using System.Net.WebSockets;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace SynthBorg
 {
     public partial class Form1 : Form
-    {   
+    {
+        // GLOBAL QUEUE OF SPEAKING TEXT
+        private Queue<Func<Task>> taskQueue = new Queue<Func<Task>>(); 
+
+        // settings
         private const long MaxLogFileSize = 1073741824; // Maximum log file size in bytes (1 GB)
         static readonly string logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SynthBorg");
         static string configPath = Path.Combine(logDirectory,  "config.json");
         static string logFilePath = Path.Combine(logDirectory, "log.txt");
         static string ignoredWordsFilePath = Path.Combine(logDirectory, "ignoredWords.txt");
+        private bool WebSocketInfo = true;
 
+        // msg handle
         private List<string> messageHistory = new List<string>(); // Maintain a list to store the message history
         private int messageIndex = -1; // Track the index of the current message in the history
-        private bool WebSocketInfo = true;
 
         private List<string> ignoredWords = new List<string>(); // Maintain a list all prohibted words
         private SpeechSynthesizer synthesizer;
 
+        // TTV websocket
         private TcpClient ircClient;
         private StreamReader reader;
         private StreamWriter writer;
+        private System.Windows.Forms.ToolTip toolTip;
 
+        // Jeebot websocket
+        private ClientWebSocket ws = new ClientWebSocket();
+        private CancellationTokenSource cts = new CancellationTokenSource();
+        private string jeebot_token = "";
+
+        // TTV auth
         private HttpListener listener;
         public string token;
 
@@ -82,6 +91,8 @@ namespace SynthBorg
             InitializeComponent();
             InitializeVoices();
             CheckUpdatesOnGit(false);
+
+            toolTip = new System.Windows.Forms.ToolTip();
         }
 
         protected override void WndProc(ref Message m)
@@ -138,9 +149,158 @@ namespace SynthBorg
         {
             LoadConfig();
             InitializeTTV();
+            if (jeebot_token.Length > 1) CheckJeeBot();
+
+            taskProcessor = Task.Run(() => ProcessTaskQueue());
 
             RegisterHotKey(this.Handle, HOTKEY_ID, MOD_SHIFT, VK_F1);
         }
+
+        private async void CheckJeeBot()
+        {
+            try
+            {
+                // Connect to the WebSocket server
+                await ws.ConnectAsync(new Uri("wss://ws.jeetbot.cc/tts_websocket"), cts.Token);
+
+                // Start a task to receive messages from the server
+                _ = Task.Run(() => ReceiveMessagesAsync());
+
+                // Prepare and send the authentication message
+                await SendJeeBotMessageAsync(new
+                {
+                    action = "start",
+                    session_id = "d22092a5-9448-47ef-ac02-b01cf198b65f",
+                    auth_token = jeebot_token
+                });
+
+                LogMessage("JeeBot was succesfully booted up!");
+            }
+            catch (Exception ex)
+            {
+                LogError($"Error in CheckJeeBot: {ex.Message}");
+            }
+        }
+
+        private async Task SendJeeBotMessageAsync(object message)
+        {
+            if (ws.State == WebSocketState.Open)
+            {
+                var messageJson = JsonConvert.SerializeObject(message);
+                var messageBytes = Encoding.UTF8.GetBytes(messageJson);
+                await ws.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, cts.Token);
+            }
+        }
+
+        private async Task ReceiveMessagesAsync()
+        {
+            var buffer = new byte[4096]; // Start with a reasonable buffer size
+            var receivedBytes = 0;
+            var messageBuilder = new StringBuilder();
+
+            while (ws.State == WebSocketState.Open)
+            {
+                try
+                {
+                    var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                    receivedBytes += result.Count;
+                    messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+
+                    if (result.EndOfMessage)
+                    {
+                        var message = messageBuilder.ToString();
+                        messageBuilder.Clear();
+                        receivedBytes = 0; // Reset for next message
+
+                        // Parse the JSON
+                        try
+                        {
+                            dynamic json = JsonConvert.DeserializeObject(message);
+                            if (json.file != null) ProcessAudioMessageAsync(json);
+                        }
+                        catch (JsonReaderException ex)
+                        {
+                            LogError($"Error parsing JSON: {ex.Message} - Message: {message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError($"Error in ReceiveMessagesAsync: {ex.Message}");
+                }
+            }
+        }
+
+        private WaveOutEvent currentWaveOut; // Store the active WaveOutEvent
+        private async Task PlayAudioAsync(byte[] audioData)
+        {
+            using (var mp3Reader = new Mp3FileReader(new MemoryStream(audioData)))
+            {
+                // Wrap Mp3FileReader in a SampleChannel
+                var sampleChannel = new SampleChannel(mp3Reader);
+
+                // Create a VolumeSampleProvider using the SampleChannel
+                var volumeProvider = new VolumeSampleProvider(sampleChannel);
+                volumeProvider.Volume = (volumeBar.Value / 100f) * 0.3f; // Set the desired volume
+
+                currentWaveOut = new WaveOutEvent(); // Create a new WaveOutEvent
+                currentWaveOut.Init(volumeProvider);
+
+                currentWaveOut.Play();
+
+                while (currentWaveOut.PlaybackState == PlaybackState.Playing)
+                {
+                    await Task.Delay(100);
+                }
+
+                currentWaveOut.Dispose(); // Dispose the WaveOutEvent when done
+                currentWaveOut = null;
+            }
+        }
+
+        private async Task ProcessAudioMessageAsync(dynamic json)
+        {
+            try
+            {
+                string base64Audio = json.file;
+
+                // Remove the data URL prefix
+                string prefix = "data:audio/mpeg;base64,";
+                if (base64Audio.StartsWith(prefix))
+                {
+                    base64Audio = base64Audio.Substring(prefix.Length);
+                }
+
+                byte[] audioData = Convert.FromBase64String(base64Audio);
+                if (!IsIgnoredUser(json.username.ToString()))
+                {
+                    LogMessage($"Jeebot message spoke: {json.cleaned_content.ToString()}");
+                    taskQueue.Enqueue(() => PlayAudioAsync(audioData));
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError($"Error in ProcessAudioMessageAsync: {ex.Message}");
+            }
+        }
+
+        private Task taskProcessor;
+        private async Task ProcessTaskQueue()
+        {
+            while (true)
+            {
+                if (taskQueue.Count > 0)
+                {
+                    var task = taskQueue.Dequeue();
+                    await task(); // Await the task instead of blocking
+                }
+                else
+                {
+                    await Task.Delay(100); // Use Task.Delay to avoid blocking the thread
+                }
+            }
+        }
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             SaveConfig();
@@ -163,6 +323,8 @@ namespace SynthBorg
                 voice_allow_msg = voice_allow_msg,
                 voice_not_allow_msg = voice_not_allow_msg,
                 hotkey = VK_F1,
+                volume_slider = volumeBar.Value,
+                jeebot_token = jeebot_token
             };
 
             var json = JsonConvert.SerializeObject(config);
@@ -188,6 +350,8 @@ namespace SynthBorg
                     voice_allow_msg = config.voice_allow_msg;
                     voice_not_allow_msg = config.voice_not_allow_msg;
                     VK_F1 = config.hotkey;
+                    volumeBar.Value = config.volume_slider;
+                    jeebot_token = config.jeebot_token;
                 }
             }
         }
@@ -400,6 +564,8 @@ namespace SynthBorg
             byte[] bytesToSend = Encoding.UTF8.GetBytes(formattedMessage);
             ircClient.GetStream().Write(bytesToSend, 0, bytesToSend.Length);
         }
+
+
         private async Task ProcessMessageAsync(string message)
         {
             try
@@ -414,27 +580,14 @@ namespace SynthBorg
                 string tags = parts[0];
                 string display_name = GetFieldValue(tags, "display-name").ToLower();
 
-                LogMessage(GetFieldValue(tags, "mod"));
+                // LogMessage(GetFieldValue(tags, "mod"));
 
-                // permission check
-                bool is_mod = GetFieldValue(tags, "mod") == "1";
-                bool is_sub = GetFieldValue(tags, "subscriber") == "1";
-                bool is_vip = GetFieldValue(tags, "vip") != null;
-               // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
-                    
-                bool canSpeak = false;
-                if (checkBox1.Checked && is_mod) canSpeak = true;
-                if (checkBox2.Checked && is_vip) canSpeak = true;
-                if (checkBox3.Checked && is_sub) canSpeak = true;
-
-                if (channelBox.Text.ToLower() == display_name) canSpeak = true;
-                if (IsWhitelistedUser(display_name)) canSpeak = true;
-                if (IsIgnoredUser(display_name)) canSpeak = false;
+                bool canSpeak = CheckUserPermission(tags, display_name);
 
                 // Command's below
-                if (msgPayload.StartsWith("!say "))
+                if (msgPayload.StartsWith("!! "))
                 {
-                    string text = msgPayload.Substring(5);
+                    string text = msgPayload.Substring(3);
                     if (canSpeak) await SpeakAsync(text);
                 }
 
@@ -454,6 +607,26 @@ namespace SynthBorg
             {
                 LogError($"Error processing message: {ex.Message}");
             }
+        }
+
+        private bool CheckUserPermission(string tags, string display_name)
+        {
+            // permission check
+            bool is_mod = GetFieldValue(tags, "mod") == "1";
+            bool is_sub = GetFieldValue(tags, "subscriber") == "1";
+            bool is_vip = GetFieldValue(tags, "vip") != null;
+            // LogMessage($"is_mod={is_mod}; is_vip={is_vip}; is_sub={is_sub};");
+
+            bool canSpeak = false;
+            if (checkBox1.Checked && is_mod) canSpeak = true;
+            if (checkBox2.Checked && is_vip) canSpeak = true;
+            if (checkBox3.Checked && is_sub) canSpeak = true;
+
+            if (channelBox.Text.ToLower() == display_name) canSpeak = true;
+            if (IsWhitelistedUser(display_name)) canSpeak = true;
+            if (IsIgnoredUser(display_name)) canSpeak = false;
+
+            return canSpeak;
         }
 
         private bool IsWhitelistedUser(string username)
@@ -480,11 +653,22 @@ namespace SynthBorg
                     // Set the voice and speed
                     synthesizer.SelectVoice(selectedVoice);
                     synthesizer.Rate = selectedSpeed;
+                    synthesizer.Volume = volumeBar.Value;
 
                     message = ReplaceIgnoredWords(message);
 
-                    await Task.Run(() => synthesizer.SpeakAsync(message));
-                    LogMessage("Spoke: " + message);
+                    taskQueue.Enqueue(async () =>
+                    {
+                        try
+                        {
+                            await Task.Run(() => synthesizer.Speak(message));
+                            LogMessage("Spoke: " + message);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            LogMessage("TTS canceled.");
+                        }
+                    });
                 }
             }
             catch (Exception ex)
@@ -609,6 +793,15 @@ namespace SynthBorg
                         break;
                     case "/update":
                             CheckUpdatesOnGit(true);
+                        break;
+                    case "/jeebot":
+                        if (commandParts.Length > 1)
+                        {
+                            if (commandParts[1] == "set")
+                            {
+                                jeebot_token = string.Join(" ", commandParts.Skip(2));
+                            }
+                        }
                         break;
                     case "/me":
                         if (commandParts.Length > 2)
@@ -764,6 +957,7 @@ namespace SynthBorg
                                 "/blocklist [add/del/show] [имя_пользователя] Добавить/удалить/показать список пользователь игнор списка" + Environment.NewLine +
                                 "/whitelist [add/del/show] [имя_пользователя] - Добавить/удалить/показать список пользователь белого списка" + Environment.NewLine +
                                 "/me [allow/deny] \"текст_сообщения\" - Изменить текст сообщения для команды !me" + Environment.NewLine +
+                                "/jeebot [set] \"токен\" - установить токен jeebot tts" + Environment.NewLine +
                                 "/update - Проверить наличие обновления SynthBorg'a.";
 
                             LogTextBoxOnly(helpText);
@@ -1029,7 +1223,24 @@ namespace SynthBorg
         private void stopall_btnClick(object sender, EventArgs e)
         {
             LogMessage("Force caneceling all speking task's.");
+
             synthesizer.SpeakAsyncCancelAll();
+
+            if (currentWaveOut != null)
+            {
+                currentWaveOut.Stop();
+            }
+        }
+
+        private void trackBar1_Scroll(object sender, EventArgs e)
+        {
+
+        }
+
+        private void volumeBar_Scroll(object sender, EventArgs e)
+        {
+            toolTip.RemoveAll();
+            toolTip.Show(volumeBar.Value.ToString(), (System.Windows.Forms.TrackBar)sender);
         }
     }
 }

@@ -47,12 +47,12 @@
             this.checkBox3 = new System.Windows.Forms.CheckBox();
             this.checkBox2 = new System.Windows.Forms.CheckBox();
             this.checkBox1 = new System.Windows.Forms.CheckBox();
-            this.groupBox4 = new System.Windows.Forms.GroupBox();
             this.stopall_btn = new System.Windows.Forms.Button();
+            this.volumeBar = new System.Windows.Forms.TrackBar();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
-            this.groupBox4.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.volumeBar)).BeginInit();
             this.SuspendLayout();
             // 
             // cboSpeed
@@ -84,15 +84,15 @@
             // 
             this.txtMessage.Location = new System.Drawing.Point(12, 403);
             this.txtMessage.Name = "txtMessage";
-            this.txtMessage.Size = new System.Drawing.Size(715, 22);
+            this.txtMessage.Size = new System.Drawing.Size(828, 22);
             this.txtMessage.TabIndex = 2;
             this.txtMessage.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtMessage_KeyDown);
             // 
             // btnSay
             // 
-            this.btnSay.Location = new System.Drawing.Point(733, 399);
+            this.btnSay.Location = new System.Drawing.Point(846, 399);
             this.btnSay.Name = "btnSay";
-            this.btnSay.Size = new System.Drawing.Size(57, 31);
+            this.btnSay.Size = new System.Drawing.Size(114, 31);
             this.btnSay.TabIndex = 3;
             this.btnSay.Text = "Enter";
             this.btnSay.UseVisualStyleBackColor = true;
@@ -194,7 +194,7 @@
             this.log_textBox.Name = "log_textBox";
             this.log_textBox.ReadOnly = true;
             this.log_textBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.log_textBox.Size = new System.Drawing.Size(777, 273);
+            this.log_textBox.Size = new System.Drawing.Size(948, 273);
             this.log_textBox.TabIndex = 6;
             // 
             // groupBox3
@@ -239,32 +239,34 @@
             this.checkBox1.Text = "Moderators";
             this.checkBox1.UseVisualStyleBackColor = true;
             // 
-            // groupBox4
-            // 
-            this.groupBox4.Controls.Add(this.stopall_btn);
-            this.groupBox4.Location = new System.Drawing.Point(690, 12);
-            this.groupBox4.Name = "groupBox4";
-            this.groupBox4.Size = new System.Drawing.Size(100, 102);
-            this.groupBox4.TabIndex = 8;
-            this.groupBox4.TabStop = false;
-            this.groupBox4.Enter += new System.EventHandler(this.groupBox4_Enter);
-            // 
             // stopall_btn
             // 
-            this.stopall_btn.Location = new System.Drawing.Point(6, 17);
+            this.stopall_btn.Location = new System.Drawing.Point(690, 19);
             this.stopall_btn.Name = "stopall_btn";
-            this.stopall_btn.Size = new System.Drawing.Size(87, 77);
+            this.stopall_btn.Size = new System.Drawing.Size(269, 38);
             this.stopall_btn.TabIndex = 0;
-            this.stopall_btn.Text = "STOP ALL";
+            this.stopall_btn.Text = "STOP ";
             this.stopall_btn.UseVisualStyleBackColor = true;
             this.stopall_btn.Click += new System.EventHandler(this.stopall_btnClick);
+            // 
+            // volumeBar
+            // 
+            this.volumeBar.LargeChange = 10;
+            this.volumeBar.Location = new System.Drawing.Point(690, 62);
+            this.volumeBar.Maximum = 100;
+            this.volumeBar.Name = "volumeBar";
+            this.volumeBar.Size = new System.Drawing.Size(270, 56);
+            this.volumeBar.TabIndex = 8;
+            this.volumeBar.TickFrequency = 10;
+            this.volumeBar.Scroll += new System.EventHandler(this.volumeBar_Scroll);
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(802, 433);
-            this.Controls.Add(this.groupBox4);
+            this.ClientSize = new System.Drawing.Size(971, 433);
+            this.Controls.Add(this.volumeBar);
+            this.Controls.Add(this.stopall_btn);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.log_textBox);
             this.Controls.Add(this.groupBox2);
@@ -273,8 +275,8 @@
             this.Controls.Add(this.txtMessage);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
-            this.MaximumSize = new System.Drawing.Size(820, 480);
-            this.MinimumSize = new System.Drawing.Size(820, 480);
+            this.MaximumSize = new System.Drawing.Size(989, 480);
+            this.MinimumSize = new System.Drawing.Size(989, 480);
             this.Name = "Form1";
             this.Text = "SynthBorg";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
@@ -285,7 +287,7 @@
             this.groupBox2.PerformLayout();
             this.groupBox3.ResumeLayout(false);
             this.groupBox3.PerformLayout();
-            this.groupBox4.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.volumeBar)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -311,8 +313,8 @@
         private System.Windows.Forms.TextBox channelBox;
         private System.Windows.Forms.TextBox tokenBox;
         private System.Windows.Forms.Button buttonTokenGen;
-        private System.Windows.Forms.GroupBox groupBox4;
         private System.Windows.Forms.Button stopall_btn;
+        private System.Windows.Forms.TrackBar volumeBar;
     }
 }
 

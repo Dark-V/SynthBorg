@@ -8,6 +8,7 @@ namespace SynthBorg
 {
     public class Config
     {
+        public string jeebot_token { get; set; }
         public string Voice { get; set; }
         public string voice_allow_msg { get; set; }
         public string voice_not_allow_msg { get; set; }
@@ -21,5 +22,6 @@ namespace SynthBorg
         public int Speed { get; set; }
         public List<string> IgnoredUsers { get; set; }
         public List<string> WhitelistedUsers { get; set; }
+        public int volume_slider { get; set; }
     }
 }
